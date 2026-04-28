@@ -3,15 +3,10 @@ package main
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"log"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-)
-
-var (
-	err error
 )
 
 type Task struct {
@@ -19,21 +14,23 @@ type Task struct {
 	Title       string
 	StartDate   time.Time
 	DueDate     time.Time
-	Status      bool
-	Priority    bool
+	Status      int
+	Priority    int
 	Description string
 	CreatedAt   time.Time
 }
 
-func dbConn() (db *sql.DB) {
+func dbConn() *sql.DB {
 	dbDriver := "mysql"
 	dbUser := "root"
 	dbPass := "12345"
 	dbName := "gotest"
+
 	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName+"?parseTime=true")
 	if err != nil {
 		panic(err.Error())
 	}
+
 	return db
 }
 
@@ -46,76 +43,73 @@ type repository struct {
 	db *sql.DB
 }
 
+// NewRepository receives a database connection and stores it.
+// This is important for testing because sqlmock passes a fake database here.
 func NewRepository(db *sql.DB) Repository {
-	return &repository{db: dbConn()}
+	return &repository{db: db}
 }
 
+// Find searches one task by id.
+// QueryRow is simpler than Query here because we expect only one row.
 func (r repository) Find(id int) (Task, error) {
 	var task Task
 
-	rows, _ := r.db.Query("SELECT * FROM tasks WHERE id=?", id)
-	defer rows.Close()
+	err := r.db.QueryRow(
+		`SELECT id, title, start_date, due_date, status, priority, description, created_at
+		 FROM tasks
+		 WHERE id = ?`,
+		id,
+	).Scan(
+		&task.ID,
+		&task.Title,
+		&task.StartDate,
+		&task.DueDate,
+		&task.Status,
+		&task.Priority,
+		&task.Description,
+		&task.CreatedAt,
+	)
 
-	// Eğer kayıt yoksa
-	if rows.Next() == false {
-		return task, errors.New("Kayıt bulunamadı!")
-	}
-
-	for rows.Next() {
-		err := rows.Scan(&task.ID, &task.Title, &task.StartDate, &task.DueDate, &task.Status, &task.Priority, &task.Description, &task.CreatedAt)
-		if err != nil {
-			return task, errors.New("Kayıtlar eşleştirilemedi!")
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return task, errors.New("record not found")
 		}
-	}
-
-	if err = rows.Err(); err != nil {
 		return task, err
 	}
 
 	return task, nil
 }
 
+// Add inserts a new task and returns the generated id.
 func (r repository) Add(task Task) (int64, error) {
-
-	stmt, err := r.db.Prepare("INSERT INTO tasks (title,start_date,due_date,status,priority,description,created_at) VALUES(?,?,?,?,?,?,?)")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	res, err := stmt.Exec(task.Title, task.StartDate, task.DueDate, task.Status, task.Priority, task.Description, task.CreatedAt)
+	res, err := r.db.Exec(
+		`INSERT INTO tasks (title, start_date, due_date, status, priority, description, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		task.Title,
+		task.StartDate,
+		task.DueDate,
+		task.Status,
+		task.Priority,
+		task.Description,
+		task.CreatedAt,
+	)
 	if err != nil {
 		return 0, err
 	}
 
-	lastID, err := res.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-
-	return lastID, nil
+	return res.LastInsertId()
 }
 
 func main() {
 	db := dbConn()
 	myDB := NewRepository(db)
-	// var task Task
-
-	// 1 nolu kayıdı bul
-	/* if task, err = myDB.Find(1); err != nil {
-		log.Println(err)
-		return
-	}
-
-	jsonResult, _ := json.MarshalIndent(task, "", "    ")
-	fmt.Println(string(jsonResult))
-	*/
 
 	task := Task{
 		Title:       "React Native Öğren",
 		StartDate:   time.Now(),
-		DueDate:     time.Now(),
-		Status:      true,
-		Priority:    true,
+		DueDate:     time.Now().AddDate(0, 1, 0),
+		Status:      1,
+		Priority:    1,
 		Description: "Mobil uygulama geliştirme artık günümüzün olmazsa olmazı.",
 		CreatedAt:   time.Now(),
 	}
@@ -126,6 +120,5 @@ func main() {
 		return
 	}
 
-	fmt.Println(lastID)
-
+	log.Println(lastID)
 }

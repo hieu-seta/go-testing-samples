@@ -16,14 +16,14 @@ func TestHttp(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler(w, req)
 
-	// Status code test
-	if w.Code != 404 {
-		t.Error("Http test isteği başarısız")
+	// Status code test: expect 200 OK
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
 	}
 
-	// Return value test
-	if w.Body.String() != "pongd" {
-		t.Error("Dönen cevap farklı, test başarısız")
+	// Return value test: expect body "pong"
+	if w.Body.String() != "pong" {
+		t.Errorf("Expected body %q, got %q", "pong", w.Body.String())
 	}
 
 }

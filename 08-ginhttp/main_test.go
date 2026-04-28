@@ -14,12 +14,12 @@ func TestPingRoute(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	// Status code test
-	if w.Code != 202 {
-		t.Error("Http test isteği başarısız")
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %d", w.Code)
 	}
 
 	// Return value test
-	if w.Body.String() != "pongs" {
-		t.Error("Dönen cevap farklı, test başarısız")
+	if w.Body.String() != "pong" {
+		t.Errorf("Expected body 'pong', got %q", w.Body.String())
 	}
 }

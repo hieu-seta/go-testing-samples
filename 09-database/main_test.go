@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"regexp"
 	"testing"
 	"time"
@@ -10,56 +9,114 @@ import (
 )
 
 func TestFind(t *testing.T) {
-	// the db satisfy the sql.DB struct
+	// sqlmock gives us a fake *sql.DB for testing.
 	db, mock, err := sqlmock.New()
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		t.Fatalf("unexpected error when opening mock database: %s", err)
 	}
 	defer db.Close()
 
-	// our sql.DB must exec the follow query
-	mock.ExpectQuery("SELECT * FROM tasks").
-		// the number 3 must be on the query like "where id = 3"
-		WithArgs(1)
-		// TODO: define the values that need to be returned from the database
+	createdAt := time.Date(2026, 4, 28, 10, 0, 0, 0, time.UTC)
+	startDate := createdAt
+	dueDate := createdAt.AddDate(0, 1, 0)
 
-	myDB := NewRepository(db) // passes the mock to our code
+	// Build the row that the repository should receive from the database.
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"title",
+		"start_date",
+		"due_date",
+		"status",
+		"priority",
+		"description",
+		"created_at",
+	}).AddRow(
+		1,
+		"Go ile Test Yazmayı Öğren",
+		startDate,
+		dueDate,
+		1,
+		1,
+		"Test yazmak gerçekten çok önemlidir. Kodu kalitesini artırır. Hataları giderir.",
+		createdAt,
+	)
 
-	// run the code with the database mock
-	if _, err := myDB.Find(1); err != nil {
-		t.Errorf("something went wrong: %s", err.Error())
+	// Expect the exact query used by Find.
+	mock.ExpectQuery(regexp.QuoteMeta(
+		`SELECT id, title, start_date, due_date, status, priority, description, created_at
+		 FROM tasks
+		 WHERE id = ?`,
+	)).
+		WithArgs(1).
+		WillReturnRows(rows)
+
+	repo := NewRepository(db)
+
+	task, err := repo.Find(1)
+	if err != nil {
+		t.Fatalf("failed to find task: %s", err)
+	}
+
+	if task.ID != 1 {
+		t.Errorf("expected ID 1, got %d", task.ID)
+	}
+
+	if task.Title != "Go ile Test Yazmayı Öğren" {
+		t.Errorf("unexpected title: %s", task.Title)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %s", err)
 	}
 }
 
 func TestAdd(t *testing.T) {
-	// the db satisfy the sql.DB struct
 	db, mock, err := sqlmock.New()
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		t.Fatalf("unexpected error when opening mock database: %s", err)
 	}
 	defer db.Close()
 
-	var id int64
+	now := time.Date(2026, 4, 28, 10, 0, 0, 0, time.UTC)
+
 	task := Task{
-		Title:       "React Native Öğren",
-		StartDate:   time.Now(),
-		DueDate:     time.Now(),
-		Status:      true,
-		Priority:    true,
-		Description: "Mobil uygulama geliştirme artık günümüzün olmazsa olmazı.",
-		CreatedAt:   time.Now(),
+		Title:       "Learn React Native",
+		StartDate:   now,
+		DueDate:     now.AddDate(0, 1, 0),
+		Status:      1,
+		Priority:    1,
+		Description: "Mobile development is now essential in modern software development.",
+		CreatedAt:   now,
 	}
 
-	mock.ExpectQuery(regexp.QuoteMeta(
-		`INSERT INTO tasks (title,start_date,due_date,status,priority,description,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)`)).
-		WithArgs(task.Title, task.StartDate, task.DueDate, task.Status, task.Priority, task.Description, task.CreatedAt).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(id))
+	// Expect the INSERT query and the values passed to Exec.
+	mock.ExpectExec(regexp.QuoteMeta(
+		`INSERT INTO tasks (title, start_date, due_date, status, priority, description, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+	)).
+		WithArgs(
+			task.Title,
+			task.StartDate,
+			task.DueDate,
+			task.Status,
+			task.Priority,
+			task.Description,
+			task.CreatedAt,
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	myDB := NewRepository(db) // passes the mock to our code
+	repo := NewRepository(db)
 
-	lastID, err := myDB.Add(task)
+	lastID, err := repo.Add(task)
 	if err != nil {
-		t.Errorf("something went wrong: %s", err.Error())
+		t.Fatalf("failed to add task: %s", err)
 	}
-	fmt.Println(lastID)
+
+	if lastID != 1 {
+		t.Errorf("expected last inserted id 1, got %d", lastID)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %s", err)
+	}
 }

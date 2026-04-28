@@ -5,7 +5,8 @@ import (
 	"testing"
 )
 
-var table = []struct {
+// testCases holds a list of test scenarios for the Sum function.
+var testCases = []struct {
 	x    int
 	y    int
 	want int
@@ -16,15 +17,19 @@ var table = []struct {
 	{12, 5, 17},
 }
 
-func TestSumParalel(t *testing.T) {
+// TestSumParallel tests the Sum function with parallel execution.
+// Each subtest runs in parallel to demonstrate concurrent test execution.
+func TestSumParallel(t *testing.T) {
 	t.Parallel()
-	for _, row := range table {
-		testName := fmt.Sprintf("Test %d+%d", row.x, row.y)
+	for _, tc := range testCases {
+		// Rebind tc to avoid issues with loop variable capture in parallel tests.
+		tc := tc
+		testName := fmt.Sprintf("%d+%d", tc.x, tc.y)
 		t.Run(testName, func(t *testing.T) {
 			t.Parallel()
-			got, _ := Sum(row.x, row.y)
-			if got != row.want {
-				t.Errorf("Test fail! want: '%d', got: '%d'", row.want, got)
+			got, _ := Sum(tc.x, tc.y)
+			if got != tc.want {
+				t.Errorf("Sum(%d, %d) = %d, want %d", tc.x, tc.y, got, tc.want)
 			}
 		})
 	}
